@@ -1,8 +1,11 @@
 module Symbols
   def symbols_from_library(library)
     syms = `nm -gU #{library}`.split("\n")
-    result = classes_from_symbols(syms)
-    result = result + constants_from_symbols(syms)
+    classes = classes_from_symbols(syms)
+    result = classes + constants_from_symbols(syms)
+
+    global_syms = `nm -U #{library}`.split("\n")
+    result = result + category_selectors_from_symbols(global_syms, classes)
 
     result.reject { |e| e == "llvm.cmdline" || e == "llvm.embedded.module" }
   end
@@ -30,6 +33,19 @@ module Symbols
     consts + other_consts
   end
 
+  def category_selectors_from_symbols(global_syms, class_symbols)
+    selectors = global_syms.select {|cat| cat[/ t (\+|\-)\[.*\(.*\) .*\]/]}
+    class_symbols.each do |klass|
+      #Reject selectors on non global classes
+      selectors = selectors.reject { |sel| sel.include? klass }
+    end
+    selectors = selectors.map { |cat| cat.gsub(/.* t (\-|\+).* /, '') }
+    selectors = selectors.map { |cat| cat.gsub(/(\]|:).*/, '')}
+    selectors = selectors.reject { |cat| cat[/^set/]} #setters
+    selectors.uniq
+  end
+
   module_function :classes_from_symbols
   module_function :constants_from_symbols
+  module_function :category_selectors_from_symbols
 end
